@@ -1,32 +1,56 @@
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Streaming;
+using MediaBrowser.Model.Tasks;
 
-public class RemuxScanTask(IItemRepository _itemRepo, IMediaSourceManager _sourceManager, ITranscodeManager _transcodeManager)
-    : ILibraryPostScanTask
+public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _sourceManager, ITranscodeManager _transcodeManager)
+    : IScheduledTask
 {
-    public async Task Run(IProgress<double> progress, CancellationToken cancellationToken)
+    public string Name => "Remux Dolby Vision MKVs";
+
+    public string Key => nameof(RemuxLibraryTask);
+
+    public string Description => "";
+
+    public string Category => "Library";
+
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
     {
-        var allItems = _itemRepo.GetItems(new MediaBrowser.Controller.Entities.InternalItemsQuery
+        return [new TaskTriggerInfo(){ Type = TaskTriggerInfo.TriggerDaily, TimeOfDayTicks = 0 }];
+    }
+
+    public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        var allItems = _itemRepo.GetItems(new InternalItemsQuery
         {
             MediaTypes = [MediaType.Video],
             ItemIds = [Guid.Parse("a38eb7a320aff68b1371f98fa9bab20c")]
         });
 
-        var originalItem = allItems.Items[0];
-        var inputPath = originalItem.Path;
+        foreach (var item in allItems.Items)
+        {
+            await ProcessOneItem(item, cancellationToken);
+        }
+    }
+
+    private async Task ProcessOneItem(BaseItem item, CancellationToken cancellationToken)
+    {
+        var inputPath = item.Path;
         var outputPath = $"{inputPath}.mp4";
 
-        var streams = _sourceManager.GetMediaStreams(allItems.Items[0].Id);
+        var streams = _sourceManager.GetMediaStreams(item.Id);
         var doviStreams = streams.Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video
                                              && s.DvProfile.HasValue).ToList();
         
         var remuxRequest = new StreamState(_sourceManager, TranscodingJobType.Progressive, _transcodeManager);
 
         // TODO: does this return multiple versions of an item?
-        remuxRequest.MediaSource = allItems.Items[0].GetMediaSources(true)[0];
+        // also I can't decide if I like that the model object comes back with services inside it
+        // which can run lookups like this. The API is sort of clean, actually, but... maybe I'm just a hater.
+        remuxRequest.MediaSource = item.GetMediaSources(true)[0];
         remuxRequest.Request = new StreamingRequestDto
         {
             LiveStreamId = null

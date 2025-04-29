@@ -43,7 +43,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _so
         var doviStream = streams.FirstOrDefault(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video
                                              && s.DvProfile.HasValue);
         
-        if (doviStream is null) return;
+        if (doviStream is not {DvProfile: 8, DvVersionMajor: 1}) return;
 
         // if there's an existing MP4 source, assume we made it.
         // also I can't decide if I like that the model object comes back with services inside it
@@ -61,7 +61,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _so
         remuxRequest.MediaSource = ourSource;
         remuxRequest.Request = new StreamingRequestDto
         {
-            LiveStreamId = null
+            LiveStreamId = null // i don't remember why this has to be null
         };
 
         remuxRequest.MediaPath = outputPath;
@@ -79,6 +79,6 @@ public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _so
         cli += $"\"{outputPath}\"";
  
         var remuxCancelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        await _transcodeManager.StartFfMpeg(remuxRequest, outputPath, cli, Guid.Empty, TranscodingJobType.Progressive, remuxCancelToken);
+        var job = await _transcodeManager.StartFfMpeg(remuxRequest, outputPath, cli, Guid.Empty, TranscodingJobType.Progressive, remuxCancelToken);
     }
 }

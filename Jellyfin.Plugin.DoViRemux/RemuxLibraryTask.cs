@@ -26,8 +26,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _so
     {
         var allItems = _itemRepo.GetItems(new InternalItemsQuery
         {
-            MediaTypes = [MediaType.Video],
-            ItemIds = [Guid.Parse("a38eb7a320aff68b1371f98fa9bab20c")]
+            MediaTypes = [MediaType.Video]
         });
 
         foreach (var item in allItems.Items)
@@ -38,19 +37,28 @@ public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _so
 
     private async Task ProcessOneItem(BaseItem item, CancellationToken cancellationToken)
     {
-        var inputPath = item.Path;
-        var outputPath = $"{inputPath}.mp4";
+        if (item.Container != "mkv") return;
 
         var streams = _sourceManager.GetMediaStreams(item.Id);
-        var doviStreams = streams.Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video
-                                             && s.DvProfile.HasValue).ToList();
+        var doviStream = streams.FirstOrDefault(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video
+                                             && s.DvProfile.HasValue);
         
+        if (doviStream is null) return;
+
+        // if there's an existing MP4 source, assume we made it.
+        // also I can't decide if I like that the model object comes back with services inside it
+        // which can run lookups like this. The API is sort of clean, actually, but... am I just a hater?
+        var otherSources = item.GetMediaSources(true);
+        if (otherSources.Any(s => s.Container == "mp4")) return;
+
+        var ourSource = otherSources.First(s => s.Container == "mkv");
+        
+        var inputPath = ourSource.Path;
+        var outputPath = $"{inputPath}.mp4";
+
         var remuxRequest = new StreamState(_sourceManager, TranscodingJobType.Progressive, _transcodeManager);
 
-        // TODO: does this return multiple versions of an item?
-        // also I can't decide if I like that the model object comes back with services inside it
-        // which can run lookups like this. The API is sort of clean, actually, but... maybe I'm just a hater.
-        remuxRequest.MediaSource = item.GetMediaSources(true)[0];
+        remuxRequest.MediaSource = ourSource;
         remuxRequest.Request = new StreamingRequestDto
         {
             LiveStreamId = null

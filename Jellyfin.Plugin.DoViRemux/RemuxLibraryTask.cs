@@ -6,6 +6,7 @@ using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Streaming;
 using MediaBrowser.Model.Tasks;
+namespace Jellyfin.Plugin.DoViRemuxPlugin;
 
 public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IMediaSourceManager _sourceManager,
@@ -28,8 +29,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var plugin = _pluginManager.GetPlugin(DoViRemuxPlugin.OurGuid)?.Instance as DoViRemuxPlugin
-            ?? throw new Exception("Can't get DoViRemuxPlugin instance");
+        var plugin = _pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin
+            ?? throw new Exception("Can't get plugin instance");
 
         var configuration = plugin.Configuration;
 

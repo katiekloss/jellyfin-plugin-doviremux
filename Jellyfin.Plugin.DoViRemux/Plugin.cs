@@ -2,7 +2,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Serialization;
 
-namespace Jellyfin.Plugin.DoViRemuxPlugin;
+namespace Jellyfin.Plugin.DoViRemux;
 
 public class Plugin : BasePlugin<PluginConfiguration>
 {

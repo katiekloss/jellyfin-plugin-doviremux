@@ -8,7 +8,7 @@ using MediaBrowser.Controller.Streaming;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Jellyfin.Plugin.DoViRemuxPlugin;
+namespace Jellyfin.Plugin.DoViRemux;
 
 public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IMediaSourceManager _sourceManager,

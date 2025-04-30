@@ -1,4 +1,5 @@
 using Jellyfin.Data.Enums;
+using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
@@ -6,7 +7,10 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Streaming;
 using MediaBrowser.Model.Tasks;
 
-public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _sourceManager, ITranscodeManager _transcodeManager)
+public class RemuxLibraryTask(IItemRepository _itemRepo,
+                              IMediaSourceManager _sourceManager,
+                              ITranscodeManager _transcodeManager,
+                              IPluginManager _pluginManager)
     : IScheduledTask
 {
     public string Name => "Remux Dolby Vision MKVs";
@@ -24,9 +28,16 @@ public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _so
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
+        var plugin = _pluginManager.GetPlugin(DoViRemuxPlugin.OurGuid)?.Instance as DoViRemuxPlugin
+            ?? throw new Exception("Can't get DoViRemuxPlugin instance");
+
+        var configuration = plugin.Configuration;
+
         var allItems = _itemRepo.GetItems(new InternalItemsQuery
         {
-            MediaTypes = [MediaType.Video]
+            MediaTypes = [MediaType.Video],
+            AncestorIds = configuration.OnlyRemuxLibraries?.Split(",").Select(Guid.Parse).ToArray()
+                ?? []
         });
 
         foreach (var item in allItems.Items)
@@ -52,7 +63,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo, IMediaSourceManager _so
         if (otherSources.Any(s => s.Container == "mp4")) return;
 
         var ourSource = otherSources.First(s => s.Container == "mkv");
-        
+
         var inputPath = ourSource.Path;
         var outputPath = $"{inputPath}.mp4";
 

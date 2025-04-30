@@ -64,7 +64,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
                 _logger.LogWarning(x, "Failed to process {ItemId}", item.Id);
             }
 
-            progress.Report(i++ / itemsToProcess.Count * 100);
+            progress.Report(++i / itemsToProcess.Count * 100);
         }
     }
 

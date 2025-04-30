@@ -1,4 +1,5 @@
 using Jellyfin.Data.Enums;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -14,7 +15,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IMediaSourceManager _sourceManager,
                               ITranscodeManager _transcodeManager,
                               IPluginManager _pluginManager,
-                              ILogger<RemuxLibraryTask> _logger)
+                              ILogger<RemuxLibraryTask> _logger,
+                              IApplicationPaths _paths)
     : IScheduledTask
 {
     public string Name => "Remux Dolby Vision MKVs";
@@ -92,7 +94,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var ourSource = otherSources.First(s => s.Container == "mkv");
 
         var inputPath = ourSource.Path;
-        var outputPath = $"{inputPath}.mp4";
+        var finalPath = $"{inputPath}.mp4";
+        var outputPath = Path.Combine(_paths.TempDirectory, finalPath.GetHashCode() + ".mp4");
 
         // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it
         // since it's also dolby, it's used by a lot of DoVi media
@@ -133,5 +136,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         {
             await Task.Delay(1000, cancellationToken);
         }
+
+        // no reason to catch a failure, the outer loop will move to the next item
+        File.Move(outputPath, finalPath);
     }
 }

@@ -37,15 +37,22 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
         var configuration = plugin.Configuration;
 
-        var allItems = _itemRepo.GetItems(new InternalItemsQuery
+        var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
         {
             MediaTypes = [MediaType.Video],
             AncestorIds = configuration.OnlyRemuxLibraries?.Split(",").Select(Guid.Parse).ToArray()
                 ?? []
-        });
+        })
+            .Items
+            .Cast<Video>()
+            .Where(i => !cancellationToken.IsCancellationRequested && ShouldProcessItem(i))
+            .ToList();
 
-        foreach (var item in allItems.Items)
+        var i = 0.0;
+        foreach (var item in itemsToProcess)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 await ProcessOneItem(item, cancellationToken);
@@ -54,25 +61,34 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             {
                 _logger.LogWarning(x, "Failed to process {ItemId}", item.Id);
             }
+
+            progress.Report(i++ / itemsToProcess.Count * 100);
         }
     }
 
-    private async Task ProcessOneItem(BaseItem item, CancellationToken cancellationToken)
+    private bool ShouldProcessItem(Video item)
     {
-        if (item.Container != "mkv") return;
+        if (item.Container != "mkv") return false;
 
         var streams = _sourceManager.GetMediaStreams(item.Id);
         var doviStream = streams.FirstOrDefault(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video
                                              && s.DvProfile.HasValue);
 
-        if (doviStream is not { DvProfile: 8, DvVersionMajor: 1 }) return;
+        if (doviStream is not { DvProfile: 8, DvVersionMajor: 1 }) return false;
 
         // if there's an existing MP4 source, assume we made it.
         // also I can't decide if I like that the model object comes back with services inside it
         // which can run lookups like this. The API is sort of clean, actually, but... am I just a hater?
         var otherSources = item.GetMediaSources(true);
-        if (otherSources.Any(s => s.Container == "mp4")) return;
+        if (otherSources.Any(s => s.Container == "mp4")) return false;
 
+        return true;
+    }
+
+    private async Task ProcessOneItem(Video item, CancellationToken cancellationToken)
+    {
+        var streams = _sourceManager.GetMediaStreams(item.Id);
+        var otherSources = item.GetMediaSources(true);
         var ourSource = otherSources.First(s => s.Container == "mkv");
 
         var inputPath = ourSource.Path;
@@ -108,7 +124,14 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         cli += "-codec:a:0 copy -copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 ";
         cli += $"\"{outputPath}\"";
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         var remuxCancelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var job = await _transcodeManager.StartFfMpeg(remuxRequest, outputPath, cli, Guid.Empty, TranscodingJobType.Progressive, remuxCancelToken);
+        using var job = await _transcodeManager.StartFfMpeg(remuxRequest, outputPath, cli, Guid.Empty, TranscodingJobType.Progressive, remuxCancelToken);
+        
+        while (!cancellationToken.IsCancellationRequested && !job.HasExited)
+        {
+            await Task.Delay(1000, cancellationToken);
+        }
     }
 }

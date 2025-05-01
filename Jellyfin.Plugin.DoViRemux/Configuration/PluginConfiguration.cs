@@ -7,7 +7,8 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string? OnlyRemuxLibraries { get; set; }
 
-    public PluginConfiguration()
-    {
-    }
+    /// <summary>
+    /// Parsed form of OnlyRemuxLibraries
+    /// </summary>
+    public Guid[] LibrariesToRemux => OnlyRemuxLibraries?.Split(",").Select(Guid.Parse).ToArray() ?? [];
 }

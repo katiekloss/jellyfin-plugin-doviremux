@@ -23,7 +23,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
     public string Key => nameof(RemuxLibraryTask);
 
-    public string Description => "";
+    public string Description => "Remuxes MKVs containing Dolby Vision 8.1 metadata into MP4";
 
     public string Category => "Library";
 
@@ -92,12 +92,19 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var otherSources = item.GetMediaSources(true);
         var ourSource = otherSources.First(s => s.Container == "mkv");
 
+        // we remux to a temporary file first, then move it to the final directory.
+        // this improves performance when jellyfin's temp directory is on a separate
+        // drive from the original media, because there's no simultaneous IO. It also
+        // avoids the problem of jellyfin trying to process the file before it's done,
+        // which can impact things like trickplay (or anything that uses ffprobe,
+        // though the faststart flag can help with that)
         var inputPath = ourSource.Path;
         var finalPath = $"{inputPath}.mp4";
         var outputPath = Path.Combine(_paths.TempDirectory, finalPath.GetHashCode() + ".mp4");
 
-        // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it
-        // since it's also dolby, it's used by a lot of DoVi media
+        // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it.
+        // it's found on a lot of DoVi media (cough particularly hybrid remuxes cough),
+        // but media like Bluray is required to have an AAC/AC3/whatever fallback stream for compatibility
         var audioStream = streams.FirstOrDefault(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio
                                               && s.Codec != "truehd"
                                               && s.Language == "eng")
@@ -137,6 +144,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         }
 
         // no reason to catch a failure, the outer loop will move to the next item
+        // although what happens if this fails?
         File.Move(outputPath, finalPath);
     }
 }

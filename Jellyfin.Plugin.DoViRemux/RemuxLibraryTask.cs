@@ -111,6 +111,14 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             // TODO: transcode it instead
             ?? throw new Exception("Couldn't find an appropriate audio stream to copy");
 
+        // PGS subtitles aren't supported by mp4. Technically we can use the copy codec
+        // and most decoders will know how to use subrip subtitles, but mov_text is standard
+        var subtitles = streams
+            .Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Subtitle
+                        && s.IsTextSubtitleStream)
+            .Select((subtitle, i) => new { subtitle.Index, OutputIndex = i, Codec = "mov_text", Lang = subtitle.Language })
+            .ToList();
+
         var remuxRequest = new StreamState(_sourceManager, TranscodingJobType.Progressive, _transcodeManager);
 
         remuxRequest.MediaSource = ourSource;
@@ -128,9 +136,13 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
         string cli = "-analyzeduration 200M -probesize 1G -fflags +genpts ";
         cli += $"-i \"{inputPath}\" ";
-        cli += $"-map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:{audioStream.Index} -map -0:s ";
+        cli += $"-map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:{audioStream.Index} ";
+        cli += string.Concat(subtitles.Select(s => $"-map 0:{s.Index} "));
         cli += "-codec:v:0 copy -tag:v:0 dvh1 -strict -2 -bsf:v hevc_mp4toannexb -start_at_zero ";
-        cli += "-codec:a:0 copy -copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 ";
+        cli += string.Concat(subtitles.Select(s => $"-codec:s:{s.OutputIndex} {s.Codec} "));
+        cli += "-codec:a:0 copy ";
+        cli += string.Concat(subtitles.Select(s => $"-metadata:s:s:{s.OutputIndex} language=\"{s.Lang}\" "));
+        cli += "-copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 ";
         cli += $"\"{outputPath}\"";
 
         cancellationToken.ThrowIfCancellationRequested();

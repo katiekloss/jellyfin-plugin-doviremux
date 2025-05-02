@@ -138,7 +138,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         cli += $"-i \"{inputPath}\" ";
         cli += $"-map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:{audioStream.Index} ";
         cli += string.Concat(subtitles.Select(s => $"-map 0:{s.Index} "));
-        cli += "-codec:v:0 copy -tag:v:0 dvh1 -strict -2 -bsf:v hevc_mp4toannexb -start_at_zero ";
+        cli += "-codec:v:0 copy -tag:v:0 dvh1 -strict experimental -bsf:v hevc_mp4toannexb -start_at_zero ";
         cli += string.Concat(subtitles.Select(s => $"-codec:s:{s.OutputIndex} {s.Codec} "));
         cli += "-codec:a:0 copy ";
         cli += string.Concat(subtitles.Select(s => $"-metadata:s:s:{s.OutputIndex} language=\"{s.Lang}\" "));

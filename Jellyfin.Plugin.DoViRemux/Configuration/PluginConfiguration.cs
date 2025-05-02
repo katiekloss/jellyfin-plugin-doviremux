@@ -10,5 +10,8 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Parsed form of OnlyRemuxLibraries
     /// </summary>
-    public Guid[] LibrariesToRemux => OnlyRemuxLibraries?.Split(",").Select(Guid.Parse).ToArray() ?? [];
+    public Guid[] LibrariesToRemux => OnlyRemuxLibraries?.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(Guid.Parse)
+        .ToArray()
+        ?? [];
 }

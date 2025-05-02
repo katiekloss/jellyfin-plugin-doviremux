@@ -42,7 +42,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
         {
             MediaTypes = [MediaType.Video],
-            AncestorIds = configuration.LibrariesToRemux
+            AncestorIds = configuration.IncludeAncestors
         })
             .Items
             .Cast<Video>() // has some additional properties (that I don't remember if we use or not)

@@ -25,3 +25,4 @@ A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my Web
 - [x] Merge remuxes into the original item (as a new "Version" in the Jellyfin UI)
 - [ ] Add a configuration page because XML sucks
 - [ ] Add some additional options for constraining what to remux
+- [ ] Use dovi_tool to convert profile 7.6 to 8.1, if your TV *really* sucks like mine

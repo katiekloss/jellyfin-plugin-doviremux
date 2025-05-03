@@ -1,6 +1,6 @@
 name: "DoViRemux"
 guid: "2f215b63-1a73-4193-9102-78f84d027014"
-version: 2
+version: 2.0.1
 targetAbi: "10.10.6.0"
 framework: "net8.0"
 owner: "katiekloss"
@@ -11,4 +11,5 @@ description: >
 category: "General"
 artifacts:
   - "Jellyfin.Plugin.DoViRemux.dll"
-changelog: "Added support for subtitles, link remuxes to original item during library scanning, and fixed incorrect progress reporting."
+changelog: |-
+  - Fixed PluginConfiguration.OnlyRemuxLibraries/IncludeAncestorIds when it's empty

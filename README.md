@@ -32,7 +32,7 @@ I wanted this to have a very seamless F5-able dev experience when developing loc
 
 I hacked this together with `launch.json` and `tasks.json` in the `.vscode` directory. If you want to run this locally the same way that I do, you'll need to change the paths there to reflect your own machine.
 
-Specifically:
+The paths in question are anything that has "katie" along the way. Specifically:
 - `launch.json`: working directory for your `jellyfin` repo clone, your Jellyfin.Server build output, and `jellyfin-web` `dist/` directory
 - `tasks.json`: path to the plugin folder within your Jellyfin's `plugins/` directory (doesn't need to exist previously)
 

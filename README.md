@@ -26,3 +26,14 @@ A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my Web
 - [ ] Add a configuration page because XML sucks
 - [ ] Add some additional options for constraining what to remux
 - [ ] Use dovi_tool to convert profile 7.6 to 8.1, if your TV *really* sucks like mine
+
+## Contributing
+I wanted this to have a very seamless F5-able dev experience when developing locally; not "build, then drag-and-drop the DLL into the plugins directory, then launch Jellyfin".
+
+I hacked this together with `launch.json` and `tasks.json` in the `.vscode` directory. If you want to run this locally the same way that I do, you'll need to change the paths there to reflect your own machine.
+
+Specifically:
+- `launch.json`: working directory for your `jellyfin` repo clone, your Jellyfin.Server build output, and `jellyfin-web` `dist/` directory
+- `tasks.json`: path to the plugin folder within your Jellyfin's `plugins/` directory (doesn't need to exist previously)
+
+Make sure you've built both `Jellyfin.Server` and `jellyfin-web` before launching!

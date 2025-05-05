@@ -41,8 +41,14 @@ public class MergeVersionsPostScanTask(ILibraryManager _libraryManager,
                 item.Id,
                 remuxedItem.Id);
 
-            remuxedItem.SetPrimaryVersionId(item.Id.ToString());
+            // Making it uppercase is important; otherwise, the linked items
+            // will still be duplicated (this took 3 hours to figure out)
+            remuxedItem.SetPrimaryVersionId(item.Id.ToString("N"));
+            remuxedItem.LinkedAlternateVersions = [];
             await remuxedItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken);
+
+            item.LinkedAlternateVersions = [new LinkedChild { Path = remuxedItem.Path, ItemId = remuxedItem.Id }];
+            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken);
         }
     }
 }

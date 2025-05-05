@@ -1,8 +1,11 @@
 # jellyfin-plugin-doviremux
-A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my WebOS-based LG TV can play them. Install at your own risk.
+A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my WebOS-based LG TV can play them. Not particularly stable at the moment.
+
+> [!CAUTION]
+> Due to Jellyfin's handling of deleted files, this plugin may make changes to your library's metadata which can only be undone by deleting and re-creating the library. Use at your own risk.
 
 ## How to use
-> [!CAUTION]
+> [!WARNING]
 >  Make sure you have enough storage space first! Remuxed MP4s will be the same size as, and be placed in the same directory as, the original media.
 
 - Download the latest release and unzip it in your plugins directory, e.g. `/var/db/jellyfin/plugins`

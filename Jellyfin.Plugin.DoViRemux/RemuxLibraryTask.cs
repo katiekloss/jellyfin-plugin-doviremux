@@ -142,6 +142,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         cli += string.Concat(subtitles.Select(s => $"-codec:s:{s.OutputIndex} {s.Codec} "));
         cli += "-codec:a:0 copy ";
         cli += string.Concat(subtitles.Select(s => $"-metadata:s:s:{s.OutputIndex} language=\"{s.Lang}\" "));
+        cli += $"-metadata:s:a:0 language=\"eng\" ";
         cli += "-copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 ";
         cli += $"\"{outputPath}\"";
 

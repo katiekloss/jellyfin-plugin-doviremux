@@ -12,4 +12,7 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.DoViRemux.dll"
 changelog: |-
-  - Fixed PluginConfiguration.OnlyRemuxLibraries/IncludeAncestorIds when it's empty
+  - Fixed the remuxed audio stream missing its language metadata
+  - Fixed "file exists" errors on temporary/final paths for various scenarios
+  - Fixed temporary file being left behind and freezing FFmpeg if a previous run failed midway
+  - Fixed remuxed items still appearing as duplicates in the UI

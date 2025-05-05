@@ -16,7 +16,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
                               ITranscodeManager _transcodeManager,
                               IPluginManager _pluginManager,
                               ILogger<RemuxLibraryTask> _logger,
-                              IApplicationPaths _paths)
+                              IApplicationPaths _paths,
+                              ILibraryManager _libraryManager)
     : IScheduledTask
 {
     public string Name => "Remux Dolby Vision MKVs";
@@ -83,6 +84,9 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var otherSources = item.GetMediaSources(true);
         if (otherSources.Any(s => s.Container == "mp4")) return false;
 
+        // or if there's an unmerged, standalone item at the expected path
+        if (_libraryManager.FindByPath(item.Path + ".mp4", false) is not null) return false;
+
         return true;
     }
 
@@ -101,6 +105,17 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var inputPath = ourSource.Path;
         var finalPath = $"{inputPath}.mp4";
         var outputPath = Path.Combine(_paths.TempDirectory, finalPath.GetHashCode() + ".mp4");
+
+        if (File.Exists(finalPath))
+        {
+            throw new Exception($"File already exists at {finalPath}");
+        }
+
+        if (File.Exists(outputPath))
+        {
+            _logger.LogWarning("Deleting temporary file at {OutputPath}", outputPath);
+            File.Delete(outputPath);
+        }
 
         // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it.
         // it's found on a lot of DoVi media (cough particularly hybrid remuxes cough),

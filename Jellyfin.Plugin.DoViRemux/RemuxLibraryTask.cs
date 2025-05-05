@@ -171,8 +171,13 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             await Task.Delay(1000, cancellationToken);
         }
 
-        // no reason to catch a failure, the outer loop will move to the next item
-        // although what happens if this fails?
-        File.Move(outputPath, finalPath);
+        try
+        {
+            File.Move(outputPath, finalPath);
+        }
+        finally
+        {
+            File.Delete(outputPath);
+        }
     }
 }

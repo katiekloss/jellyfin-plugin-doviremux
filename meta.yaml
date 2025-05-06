@@ -1,6 +1,6 @@
 name: "DoViRemux"
 guid: "2f215b63-1a73-4193-9102-78f84d027014"
-version: 2.0.2
+version: 2.1.0
 targetAbi: "10.10.6.0"
 framework: "net8.0"
 owner: "katiekloss"
@@ -12,7 +12,5 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.DoViRemux.dll"
 changelog: |-
-  - Fixed the remuxed audio stream missing its language metadata
-  - Fixed "file exists" errors on temporary/final paths for various scenarios
-  - Fixed temporary file being left behind and freezing FFmpeg if a previous run failed midway
-  - Fixed remuxed items still appearing as duplicates in the UI
+  - Removed the default task trigger
+  - Removed the post-scan task which merges remuxed versions

@@ -28,10 +28,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
     public string Category => "Library";
 
-    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
-    {
-        return [new TaskTriggerInfo() { Type = TaskTriggerInfo.TriggerDaily, TimeOfDayTicks = 0 }];
-    }
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {

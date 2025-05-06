@@ -1,6 +1,6 @@
 name: "DoViRemux"
 guid: "2f215b63-1a73-4193-9102-78f84d027014"
-version: 2.1.0
+version: 2.2.0
 targetAbi: "10.10.6.0"
 framework: "net8.0"
 owner: "katiekloss"

@@ -12,5 +12,4 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.DoViRemux.dll"
 changelog: |-
-  - Removed the default task trigger
-  - Removed the post-scan task which merges remuxed versions
+  - Added support for multiple and non-English audio streams

@@ -117,11 +117,15 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it.
         // it's found on a lot of DoVi media (cough particularly hybrid remuxes cough),
         // but media like Bluray is required to have an AAC/AC3/whatever fallback stream for compatibility
-        var audioStream = streams.FirstOrDefault(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio
-                                              && s.Codec != "truehd"
-                                              && s.Language == "eng")
+        var audioStreams = streams.Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio
+                                              && s.Codec != "truehd")
+                                  .Select((audioStream, i) => new { audioStream.Index, OutputIndex = i, audioStream.Language})
+                                  .ToList();
+        if (audioStreams.Count == 0)
+        {
             // TODO: transcode it instead
-            ?? throw new Exception("Couldn't find an appropriate audio stream to copy");
+            throw new Exception("Couldn't find an appropriate audio stream to copy");
+        }
 
         // PGS subtitles aren't supported by mp4. Technically we can use the copy codec
         // and most decoders will know how to use subrip subtitles, but mov_text is standard
@@ -148,13 +152,14 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
         string cli = "-analyzeduration 200M -probesize 1G -fflags +genpts ";
         cli += $"-i \"{inputPath}\" ";
-        cli += $"-map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:{audioStream.Index} ";
+        cli += $"-map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 ";
+        cli += string.Concat(audioStreams.Select(a => $"-map 0:{a.Index} "));
         cli += string.Concat(subtitles.Select(s => $"-map 0:{s.Index} "));
         cli += "-codec:v:0 copy -tag:v:0 dvh1 -strict experimental -bsf:v hevc_mp4toannexb -start_at_zero ";
+        cli += string.Concat(audioStreams.Select(a => $"-codec:a:{a.OutputIndex} copy "));
         cli += string.Concat(subtitles.Select(s => $"-codec:s:{s.OutputIndex} {s.Codec} "));
-        cli += "-codec:a:0 copy ";
+        cli += string.Concat(audioStreams.Select(a => $"-metadata:s:a:{a.OutputIndex} language=\"{a.Language}\" "));
         cli += string.Concat(subtitles.Select(s => $"-metadata:s:s:{s.OutputIndex} language=\"{s.Lang}\" "));
-        cli += $"-metadata:s:a:0 language=\"eng\" ";
         cli += "-copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 ";
         cli += $"\"{outputPath}\"";
 

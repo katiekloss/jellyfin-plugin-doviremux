@@ -42,6 +42,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
         var primaryUser = configuration.PrimaryUser is not null
             ? _userManager.GetUserByName(configuration.PrimaryUser)
+                ?? throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist")
             : null;
 
         var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery

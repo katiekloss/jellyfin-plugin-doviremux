@@ -12,6 +12,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public string IncludeAncestorIds { get; set; } = string.Empty;
 
     /// <summary>
+    /// A user to reference when determining if an item or its remux have been watched,
+    /// to skip remuxing or delete the remux, respectively
+    /// </summary>
+    public string? PrimaryUser { get; set; } = "katie";
+
+    /// <summary>
     /// Parsed form of IncludeAncestorIds
     /// </summary>
     [JsonIgnore]

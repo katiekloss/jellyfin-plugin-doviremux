@@ -1,3 +1,4 @@
+using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
@@ -17,7 +18,9 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IPluginManager _pluginManager,
                               ILogger<RemuxLibraryTask> _logger,
                               IApplicationPaths _paths,
-                              ILibraryManager _libraryManager)
+                              ILibraryManager _libraryManager,
+                              IUserDataManager _userDataManager,
+                              IUserManager _userManager)
     : IScheduledTask
 {
     public string Name => "Remux Dolby Vision MKVs";
@@ -37,6 +40,10 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
         var configuration = plugin.Configuration;
 
+        var primaryUser = configuration.PrimaryUser is not null
+            ? _userManager.GetUserByName(configuration.PrimaryUser)
+            : null;
+
         var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
         {
             MediaTypes = [MediaType.Video],
@@ -44,7 +51,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         })
             .Items
             .Cast<Video>() // has some additional properties (that I don't remember if we use or not)
-            .Where(i => !cancellationToken.IsCancellationRequested && ShouldProcessItem(i))
+            .Where(i => !cancellationToken.IsCancellationRequested && ShouldProcessItem(i, primaryUser))
             .ToList();
 
         var i = 0.0;
@@ -65,9 +72,15 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         }
     }
 
-    private bool ShouldProcessItem(Video item)
+    private bool ShouldProcessItem(Video item, User? primaryUser)
     {
         if (item.Container != "mkv") return false;
+
+        if (primaryUser is not null)
+        {
+            var userData = _userDataManager.GetUserData(primaryUser, item);
+            if (userData is { Played: true }) return false;
+        }
 
         var streams = _sourceManager.GetMediaStreams(item.Id);
         var doviStream = streams.FirstOrDefault(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video

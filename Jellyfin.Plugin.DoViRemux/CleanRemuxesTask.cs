@@ -25,69 +25,66 @@ public class CleanRemuxesTask(IPluginManager _pluginManager,
 
     public string Category => "Dolby Vision Remux Plugin";
 
-    public Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+    public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken = default)
     {
-        ExecuteAsyncInternal();
-        return Task.CompletedTask;
+        var plugin = _pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin
+            ?? throw new Exception("Can't get plugin instance");
 
-        void ExecuteAsyncInternal()
+        var configuration = plugin.Configuration;
+        if (configuration.PrimaryUser is null)
         {
-            var plugin = _pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin
-                ?? throw new Exception("Can't get plugin instance");
+            return;
+        }
 
-            var configuration = plugin.Configuration;
-            if (configuration.PrimaryUser is null)
+        if (_userManager.GetUserByName(configuration.PrimaryUser) is not User primaryUser)
+        {
+            throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist");
+        }
+
+        var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
+        {
+            MediaTypes = [MediaType.Video]
+        })
+            .Items
+            .Cast<Video>();
+
+        foreach (var item in itemsToProcess)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (item.Container is null // file is missing or corrupt
+                || !item.Container.Contains("mp4") // mp4s return a long list of possible file extensions, only one of which is "mp4"
+                || !item.Path.EndsWith(".mkv.mp4")) // what our plugin generates
             {
-                return;
+                continue;
             }
 
-            if (_userManager.GetUserByName(configuration.PrimaryUser) is not User primaryUser)
+            var primaryItem = _libraryManager.FindByPath(item.Path[..^4], false);
+            if (primaryItem is null)
             {
-                throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist");
+                // assume it's a .mkv.mp4 that we didn't create
+                continue;
             }
 
-            var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
+            var streams = item.GetMediaStreams();
+            if (!streams.Any(s => s.DvProfile.HasValue))
             {
-                MediaTypes = [MediaType.Video]
-            })
-                .Items
-                .Cast<Video>();
-
-            foreach (var item in itemsToProcess)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (!item.Container.Contains("mp4") // mp4s return a long list of possible file extensions, only one of which is "mp4"
-                    || !item.Path.EndsWith(".mkv.mp4"))
-                {
-                    continue;
-                }
-
-                var primaryItem = _libraryManager.FindByPath(item.Path.Substring(0, item.Path.Length - 4), false);
-                if (primaryItem is null)
-                {
-                    // assume it's a .mkv.mp4 that we didn't create
-                    continue;
-                }
-
-                var mediaSources = item.GetMediaSources(true);
-                if (!mediaSources.Any(s => s.VideoStream.DvProfile.HasValue))
-                {
-                    // also make sure it actually contains a DOVI profile
-                    continue;
-                }
-
-                // Manually marking a merged item as Played will only mark one of the items as Played
-                if (_userDataManager.GetUserData(primaryUser, item) is { Played: true }
-                    || _userDataManager.GetUserData(primaryUser, primaryItem) is { Played: true })
-                {
-                    continue;
-                }
-
-                _logger.LogInformation("Deleting item {Id} (\"{Name}\")", item.Id, item.Name);
-
-                _libraryManager.DeleteItem(item, new() { DeleteFileLocation = true });
+                // also make sure it actually contains a DOVI profile
+                continue;
             }
+
+            if (!_userDataManager.GetUserData(primaryUser, item).Played
+                && !_userDataManager.GetUserData(primaryUser, primaryItem).Played)
+            {
+                // Jellyfin doesn't consistently mark both items as Played if
+                // they've been merged, so we can't rely on the IsPlayed and User parameters
+                // in the query to determine if something was REALLY played
+                continue;
+            }
+
+            _logger.LogInformation("Deleting item {Id} (\"{Name}\")", item.Id, item.Name);
+
+            _libraryManager.DeleteItem(item, new() { DeleteFileLocation = true });
         }
     }
 

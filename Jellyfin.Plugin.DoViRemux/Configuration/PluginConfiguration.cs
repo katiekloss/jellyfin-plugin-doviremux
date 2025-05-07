@@ -15,7 +15,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// A user to reference when determining if an item or its remux have been watched,
     /// to skip remuxing or delete the remux, respectively
     /// </summary>
-    public string? PrimaryUser { get; set; } = "katie";
+    public string PrimaryUser { get; set; } = string.Empty;
 
     /// <summary>
     /// Parsed form of IncludeAncestorIds

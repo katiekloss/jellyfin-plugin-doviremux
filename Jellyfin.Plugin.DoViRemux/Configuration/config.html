@@ -11,6 +11,11 @@
                             <input id="includeAncestorIds" is="emby-input" />
                             <div class="fieldDescription">Comma-separated list of parent item IDs, within which the plugin will look for content to remux</div>
                         </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel" for="primaryUser">Skip/cleanup items watched by</label>
+                            <input id="primaryUser" is="emby-input" />
+                            <div class="fieldDescription">The plugin will use this user's play data to determine whether to skip remuxing or delete remuxes</div>
+                        </div>
                         <div>
                             <button is="emby-button" type="submit" class="button-submit emby-button">
                                 <span>Save</span>
@@ -28,6 +33,7 @@
     
                     ApiClient.getPluginConfiguration(ourPluginId).then(function (config) {
                         document.getElementById("includeAncestorIds").value = config.IncludeAncestorIds;
+                        document.getElementById("primaryUser").value = config.PrimaryUser;
     
                         Dashboard.hideLoadingMsg();
                     });
@@ -39,7 +45,8 @@
     
                     ApiClient.getPluginConfiguration(ourPluginId).then(function (config) {
                         config.IncludeAncestorIds = document.getElementById("includeAncestorIds").value;
-    
+                        config.PrimaryUser = document.getElementById("primaryUser").value;
+                        
                         ApiClient.updatePluginConfiguration(ourPluginId, config).then(function (result) {
                             Dashboard.processPluginConfigurationUpdateResult(result);
                         })

@@ -29,7 +29,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
     public string Description => "Remuxes MKVs containing Dolby Vision 8.1 metadata into MP4";
 
-    public string Category => "Library";
+    public string Category => "Dolby Vision Remux Plugin";
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 

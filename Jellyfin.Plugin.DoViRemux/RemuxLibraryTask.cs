@@ -71,6 +71,11 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
             progress.Report(++i / itemsToProcess.Count * 100);
         }
+
+        if (itemsToProcess.Count > 0)
+        {
+            _libraryManager.QueueLibraryScan();
+        }
     }
 
     private bool ShouldProcessItem(Video item, User? primaryUser)

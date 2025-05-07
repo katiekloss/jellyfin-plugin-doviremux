@@ -13,4 +13,9 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <None Remove="Configuration\config.html" />
+    <EmbeddedResource Include="Configuration\config.html" />
+  </ItemGroup>
+
 </Project>

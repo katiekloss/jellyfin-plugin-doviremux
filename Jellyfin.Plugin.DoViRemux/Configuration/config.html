@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <div id="doviRemuxConfigPage" data-role="page" class="page pluginConfigurationPage" data-require="emby-input">
+            <div data-role="content">
+                <div class="content-primary">
+                    <h1>Dolby Vision Remuxing</h1>
+                    <form id="doviRemuxConfigForm">
+                        <div class="inputContainer">
+                            <label class="inputLabel" for="includeAncestorIds">Include Ancestor IDs</label>
+                            <input id="includeAncestorIds" is="emby-input" />
+                            <div class="fieldDescription">Comma-separated list of parent item IDs, within which the plugin will look for content to remux</div>
+                        </div>
+                        <div>
+                            <button is="emby-button" type="submit" class="button-submit emby-button">
+                                <span>Save</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <script type="text/javascript">
+                let ourPluginId = "2f215b63-1a73-4193-9102-78f84d027014";
+    
+                document.getElementById("doviRemuxConfigPage").addEventListener("pageshow", function () {
+                    Dashboard.showLoadingMsg();
+    
+                    ApiClient.getPluginConfiguration(ourPluginId).then(function (config) {
+                        document.getElementById("includeAncestorIds").value = config.IncludeAncestorIds;
+    
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+    
+                document.getElementById("doviRemuxConfigForm").addEventListener("submit", function (e) {
+                    e.preventDefault();
+                    Dashboard.showLoadingMsg();
+    
+                    ApiClient.getPluginConfiguration(ourPluginId).then(function (config) {
+                        config.IncludeAncestorIds = document.getElementById("includeAncestorIds").value;
+    
+                        ApiClient.updatePluginConfiguration(ourPluginId, config).then(function (result) {
+                            Dashboard.processPluginConfigurationUpdateResult(result);
+                        })
+                    })
+                });
+            </script>
+        </div>
+    </body>
+</html>

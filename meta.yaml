@@ -13,3 +13,4 @@ artifacts:
   - "Jellyfin.Plugin.DoViRemux.dll"
 changelog: |-
   - Added support for multiple and non-English audio streams
+  - Added a configuration page

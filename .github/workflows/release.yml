@@ -1,0 +1,8 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  call-release-workflow:
+    uses: katiekloss/jellyfin-plugins/.github/workflows/release.yml@dev

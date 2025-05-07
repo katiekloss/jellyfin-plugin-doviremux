@@ -5,17 +5,11 @@ A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my Web
 > [!WARNING]
 >  Make sure you have enough storage space first! Remuxed MP4s will be the same size as, and be placed in the same directory as, the original media.
 
-- Download the latest release and unzip it in your plugins directory, e.g. `/var/db/jellyfin/plugins`
+- Add a new plugin repository with the URL: https://raw.githubusercontent.com/katiekloss/jellyfin-plugins/main/manifest.json
+- Install the "DoVi Remux" plugin
 - If you want to limit the plugin to a specific library/show/season/movie/whatever:
-  - Create `Jellyfin.Plugin.DoViRemux.xml` in the configuration directory (e.g. `/var/db/jellyfin/plugins/configurations`)
-  - Paste in:
-    > ```xml
-    >  <?xml version="1.0" encoding="utf-8"?>
-    >  <PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-    >    <IncludeAncestorIds>a656b907eb3a73532e40e44b968d0225</IncludeAncestorIds>
-    >  </PluginConfiguration>
-    >  ```
-  - Replace `IncludeAncestorIds` with the ID of the parent item you want to remux. Usually you can open its page in Jellyfin and take the value of the `id` parameter in the address bar. If you later want to remux **everything**, leave that property completely empty and restart Jellyfin.
+  - Update the "Include Ancestor IDs" config option with the ID of the parent item(s) you want to remux. Usually you can open its page in Jellyfin and take the value of the `id` parameter in the address bar.
+  - If you later want to remux **everything**, leave that option completely empty and restart Jellyfin.
 - Restart Jellyfin
 - Run the "Remux Dolby Vision MKVs" scheduled task
 - Run a library scan to detect the resulting MP4s
@@ -25,7 +19,7 @@ A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my Web
 ## Roadmap
 - [x] Generate remuxed MP4s
 - [x] ~~Merge remuxes into the original item (as a new "Version" in the Jellyfin UI)~~ *out of scope*
-- [ ] Add a configuration page because XML sucks
+- [x] Add a configuration page because XML sucks
 - [ ] Add some additional options for constraining what to remux
 - [ ] Use dovi_tool to convert profile 7.6 to 8.1, if your TV *really* sucks like mine
 

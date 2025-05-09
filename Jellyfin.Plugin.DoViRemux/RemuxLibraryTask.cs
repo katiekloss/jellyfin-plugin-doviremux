@@ -73,7 +73,13 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var doviStream = streams.FirstOrDefault(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video
                                              && s.DvProfile.HasValue);
 
-        if (doviStream is not { DvProfile: 8, DvVersionMajor: 1 }) return false;
+        // There used to be constraints here about which profiles we support remuxing, but LG TVs aren't consistent about
+        // which ones THEY support. Mine stutters when playing profile 7 but some people have success with it,
+        // so we'll remux everything just in case.
+        //
+        // Jellyfin itself will likely not be happy with profile 5, since there's no HDR10 fallback, so things
+        // like trickplay/thumbnail images (or even the entire video) may show up as the silly purple-and-green versions.
+        if (doviStream?.DvProfile is null) return false;
 
         // if there's an existing MP4 source, assume we made it.
         // also I can't decide if I like that the model object comes back with services inside it

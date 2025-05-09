@@ -4,9 +4,9 @@ version: 2.2.0
 targetAbi: "10.10.6.0"
 framework: "net8.0"
 owner: "katiekloss"
-overview: "Automatically remux Dolby Vision 8.1 files"
+overview: "Automatically remux Dolby Vision files"
 description: >
-  Remuxes media with Dolby Vision profile 8.1 metadata from MKV to MP4, for better support on LG WebOS TVs.
+  Remuxes media with Dolby Vision profile metadata from MKV to MP4, for better support on LG WebOS TVs.
 
 category: "General"
 artifacts:

@@ -27,7 +27,7 @@ A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my Web
 - [x] Add a configuration page because XML sucks
 - [x] Add some additional options for constraining what to remux
 - [x] Delete remuxes once they've been watched
-- [ ] Remux profile 5 content
+- [x] Remux profile 5 content
 - [ ] Use [dovi_tool](https://github.com/quietvoid/dovi_tool) to convert profile 7.6 to 8.1, if your TV *really* sucks like mine
 
 ## Contributing

@@ -82,7 +82,7 @@ public class CleanRemuxesTask(IPluginManager _pluginManager,
                 continue;
             }
 
-            _logger.LogInformation("Deleting item {Id} (\"{Name}\")", item.Id, item.Name);
+            _logger.LogInformation("Deleting item {Id} ({Name})", item.Id, item.Name);
 
             _libraryManager.DeleteItem(item, new() { DeleteFileLocation = true });
         }

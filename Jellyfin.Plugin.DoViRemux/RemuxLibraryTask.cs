@@ -134,9 +134,13 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             File.Delete(outputPath);
         }
 
+        // profile 7.6 can be converted to profile 8.1, with some special handling.
+        // This will be presented as a second input to FFmpeg, and it will copy that
+        // converted video stream instead of our original MKV's.
         string? downmuxedVideoPath = null;
-        if (streams.Any(s => s.DvProfile == 7 && s.DvLevel == 6))
+        if (streams.Any(s => s.DvProfile == 7 && s.DvLevel == 6) && _configuration.DownmuxProfile7)
         {
+            _logger.LogInformation("Downmuxing {Id} {Name} to Profile 8.1 first", item.Id, item.Name);
             downmuxedVideoPath = await _downmuxWorkflow.Downmux(ourSource, cancellationToken);
         }
 
@@ -198,6 +202,10 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         cli += string.Concat(audioStreams.Select(a => $"-map 0:{a.Index} "));
         cli += string.Concat(subtitles.Select(s => $"-map 0:{s.Index} "));
 
+        // This doesn't need to change if we're following the profile 7 path:
+        // the bitstream filter will have no effect if it's already Annex B,
+        // we still need to tag it with the correct codec, and at this point
+        // we're referencing the output stream index (0) instead of the input
         cli += "-codec:v:0 copy -tag:v:0 dvh1 -strict experimental -bsf:v hevc_mp4toannexb -start_at_zero ";
 
         cli += string.Concat(audioStreams.Select(a => $"-codec:a:{a.OutputIndex} copy "));
@@ -224,6 +232,11 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         finally
         {
             File.Delete(outputPath);
+            
+            if (downmuxedVideoPath is not null)
+            {
+                File.Delete(downmuxedVideoPath);
+            }
         }
     }
 }

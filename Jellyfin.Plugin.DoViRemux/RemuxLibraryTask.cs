@@ -19,7 +19,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IApplicationPaths _paths,
                               ILibraryManager _libraryManager,
                               IUserDataManager _userDataManager,
-                              IUserManager _userManager)
+                              IUserManager _userManager,
+                              DownmuxWorkflow _downmuxWorkflow)
     : IScheduledTask
 {
     public string Name => "Remux Dolby Vision MKVs";
@@ -131,6 +132,13 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         {
             _logger.LogWarning("Deleting temporary file at {OutputPath}", outputPath);
             File.Delete(outputPath);
+        }
+
+        if (streams.Any(s => s.DvProfile == 7))
+        {
+            var downmuxedVideo = await _downmuxWorkflow.Downmux(ourSource, cancellationToken);
+            // todo: use me instead
+            return;
         }
 
         // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it.

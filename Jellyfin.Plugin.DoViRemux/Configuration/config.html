@@ -16,6 +16,23 @@
                             <input id="primaryUser" is="emby-input" />
                             <div class="fieldDescription">The plugin will use this user's play data to determine whether to skip remuxing or delete remuxes</div>
                         </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="convertProfile7" type="checkbox" is="emby-checkbox" />
+                                <span>Convert Profile 7.6 to Profile 8.1</span>
+                            </label>
+                            <div class="fieldDescription">Some devices have issues playing Profile 7.6 video, even when it's remuxed to MP4. This will &quot;downmux&quot; these videos to Profile 8.1, at the expense of some visual detail you probably won't notice anyway.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel" for="doviToolPath">Path to dovi_tool</label>
+                            <input id="doviToolPath" is="emby-input" />
+                            <div class="fieldDescription">The path to dovi_tool (only required if the Profile 7.6 conversion process is enabled)</div>
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel" for="mp4boxPath">Path to mp4box</label>
+                            <input id="mp4boxPath" is="emby-input" />
+                            <div class="fieldDescription">The path to mp4box (only required if the Profile 7.6 conversion process is enabled)</div>
+                        </div>
                         <div>
                             <button is="emby-button" type="submit" class="button-submit emby-button">
                                 <span>Save</span>
@@ -34,6 +51,9 @@
                     ApiClient.getPluginConfiguration(ourPluginId).then(function (config) {
                         document.getElementById("includeAncestorIds").value = config.IncludeAncestorIds;
                         document.getElementById("primaryUser").value = config.PrimaryUser;
+                        document.getElementById("convertProfile7").checked = config.DownmuxProfile7;
+                        document.getElementById("doviToolPath").value = config.PathToDoviTool;
+                        document.getElementById("mp4boxPath").value = config.PathToMP4Box;
     
                         Dashboard.hideLoadingMsg();
                     });
@@ -46,7 +66,10 @@
                     ApiClient.getPluginConfiguration(ourPluginId).then(function (config) {
                         config.IncludeAncestorIds = document.getElementById("includeAncestorIds").value;
                         config.PrimaryUser = document.getElementById("primaryUser").value;
-                        
+                        config.DownmuxProfile7 = document.getElementById("convertProfile7").checked;
+                        config.PathToDoviTool = document.getElementById("doviToolPath").value;
+                        config.PathToMP4Box = document.getElementById("mp4boxPath").value;
+
                         ApiClient.updatePluginConfiguration(ourPluginId, config).then(function (result) {
                             Dashboard.processPluginConfigurationUpdateResult(result);
                         })

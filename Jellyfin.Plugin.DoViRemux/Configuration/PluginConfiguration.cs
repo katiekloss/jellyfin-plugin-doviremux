@@ -19,9 +19,9 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public bool DownmuxProfile7 { get; set; } = true;
 
-    public string PathToDoviTool { get; set; } = "/Users/katie/src/dovi_tool/target/release/dovi_tool";
+    public string PathToDoviTool { get; set; } = string.Empty;
 
-    public string PathToMP4Box { get; set; } = "/usr/local/bin/mp4box";
+    public string PathToMP4Box { get; set; } = string.Empty;
 
     /// <summary>
     /// Parsed form of IncludeAncestorIds

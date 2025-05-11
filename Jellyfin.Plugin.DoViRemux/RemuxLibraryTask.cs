@@ -1,7 +1,6 @@
 using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
@@ -15,7 +14,7 @@ namespace Jellyfin.Plugin.DoViRemux;
 public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IMediaSourceManager _sourceManager,
                               ITranscodeManager _transcodeManager,
-                              IPluginManager _pluginManager,
+                              PluginConfiguration _configuration,
                               ILogger<RemuxLibraryTask> _logger,
                               IApplicationPaths _paths,
                               ILibraryManager _libraryManager,
@@ -35,20 +34,15 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var plugin = _pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin
-            ?? throw new Exception("Can't get plugin instance");
-
-        var configuration = plugin.Configuration;
-
-        var primaryUser = configuration.PrimaryUser is not null
-            ? _userManager.GetUserByName(configuration.PrimaryUser)
-                ?? throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist")
+        var primaryUser = _configuration.PrimaryUser is not null
+            ? _userManager.GetUserByName(_configuration.PrimaryUser)
+                ?? throw new Exception($"Primary user '{_configuration.PrimaryUser}' does not exist")
             : null;
 
         var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
         {
             MediaTypes = [MediaType.Video],
-            AncestorIds = configuration.IncludeAncestors
+            AncestorIds = _configuration.IncludeAncestors
         })
             .Items
             .Cast<Video>() // has some additional properties (that I don't remember if we use or not)

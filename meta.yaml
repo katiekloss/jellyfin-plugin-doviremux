@@ -12,7 +12,4 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.DoViRemux.dll"
 changelog: |-
-  - Plugin will now remux all Dolby Vision content, regardless of profile
-  - Added a Primary User config option, which will:
-    - Skip remuxing for previously-watched content
-    - Delete remuxes after the user has watched them
+  - Added support for converting DoVi Profile 7.6 to 8.1

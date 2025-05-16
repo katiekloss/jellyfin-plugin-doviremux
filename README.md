@@ -20,6 +20,12 @@ A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my Web
 - Skip/cleanup items watched by
   - When set to a username, the plugin won't remux otherwise-eligible items that this user has already watched. It will also delete remuxes once the user has watched them.
   - The cleanup functionality can be triggered by running the "Clean up Dolby Vision remuxes" scheduled task, which is unscheduled by default (I have mine set to run every 6 hours).
+- Convert Profile 7.6 to Profile 8.1
+  - Automatically converts 7.6 videos to 8.1 by removing their enhancement layer, which should cause negligible quality loss. This is required for some older LG TVs which have issues processing dual-layer video (usually heavy stuttering or outright freezing)
+  - Requires two tools, the paths to which are required configuration options:
+    - [dovi_tool](https://github.com/quietvoid/dovi_tool): used to extract the raw HEVC bitstream and convert it to 8.1
+    - mp4box, part of [GPAC](https://github.com/gpac/gpac): used to remux the 8.1 video into a correctly-tagged MP4.
+  - Huge shoutout to [this Reddit comment](https://old.reddit.com/r/ffmpeg/comments/11gu4o4/comment/jn5gman) for the gory details
 
 ## Roadmap
 - [x] Generate remuxed MP4s
@@ -28,7 +34,7 @@ A giant hack that remuxes my Dolby Vision videos from MKV to MP4, so that my Web
 - [x] Add some additional options for constraining what to remux
 - [x] Delete remuxes once they've been watched
 - [x] Remux profile 5 content
-- [ ] Use [dovi_tool](https://github.com/quietvoid/dovi_tool) to convert profile 7.6 to 8.1, if your TV *really* sucks like mine
+- [x] Use [dovi_tool](https://github.com/quietvoid/dovi_tool) to convert profile 7.6 to 8.1, if your TV *really* sucks like mine
 
 ## Contributing
 I wanted this to have a very seamless F5-able dev experience when developing locally; not "build, then drag-and-drop the DLL into the plugins directory, then launch Jellyfin".

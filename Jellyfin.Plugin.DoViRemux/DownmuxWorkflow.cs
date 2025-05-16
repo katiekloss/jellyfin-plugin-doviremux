@@ -14,42 +14,57 @@ namespace Jellyfin.Plugin.DoViRemux;
 // stream from our MP4 instead of the original MKV)
 public class DownmuxWorkflow(PluginConfiguration _configuration,
                              ILogger<DownmuxWorkflow> _logger,
-                             ITranscodeManager _transcodeManager,
                              IApplicationPaths _paths)
 {
     public async Task<string> Downmux(MediaSourceInfo mediaSource, CancellationToken token)
     {
+        string hevcStreamPath = $"/tmp/dovi_tool_{mediaSource.Id}.hevc";
+        string downmuxPath = $"/tmp/{mediaSource.Id}_profile8.mp4";
+
         // extract the HEVC stream...
-        using var ffmpeg = Process.Start(new ProcessStartInfo("ffmpeg")
+        using var ffmpeg = new Process()
         {
-            // trivia: using the hevc muxer automatically adds the hevc_mp4toannexb bitstream filter
-            Arguments = string.Join(" ", [
-                "-y",
-                $"-i \"{mediaSource.Path}\"",
-                "-dn",
-                "-c:v copy",
-                "-f hevc",
-                "-"
-            ]),
-            RedirectStandardOutput = true
-        });
+            StartInfo = new ProcessStartInfo("ffmpeg")
+            {
+                Arguments = string.Join(" ", [
+                    "-y",
+                    $"-i \"{mediaSource.Path}\"",
+                    "-dn",
+                    "-c:v copy",
+                    "-f hevc", // trivia: using the hevc muxer automatically adds the hevc_mp4toannexb bitstream filter
+                    "-"
+                ]),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }
+        };
         
+        _logger.LogInformation("{Command} {Arguments}", ffmpeg.StartInfo.FileName, ffmpeg.StartInfo.Arguments);
+        ffmpeg.Start();
+
         if (ffmpeg is null || ffmpeg.HasExited) throw new InvalidOperationException("FFmpeg failed to start");
 
         // and feed it into dovi_tool, discarding the enhancement layer
-        using var doviTool = Process.Start(new ProcessStartInfo(_configuration.PathToDoviTool)
+        using var doviTool = new Process()
         {
-            Arguments = string.Join(" ", [
-                "-m 2", // convert RPU to 8.1
-                "convert", // modify RPU
-                "--discard", // discard EL
-                "-",
-                "-o /tmp/dovi_tool.hevc"
-            ]),
-            RedirectStandardInput = true
-        });
+            StartInfo = new ProcessStartInfo(_configuration.PathToDoviTool)
+            {
+                Arguments = string.Join(" ", [
+                    "-m 2", // convert RPU to 8.1
+                    "convert", // modify RPU
+                    "--discard", // discard EL
+                    "-",
+                    $"-o {hevcStreamPath}"
+                ]),
+                RedirectStandardInput = true,
+                RedirectStandardError = true
+            }
+        };
         
-        if (doviTool is null || doviTool.HasExited) throw new InvalidOperationException("dovi_tool failed to start");
+        _logger.LogInformation("{Command} {Arguments}", doviTool.StartInfo.FileName, doviTool.StartInfo.Arguments);
+        doviTool.Start();
+                                                   
+        if (doviTool.HasExited) throw new InvalidOperationException("dovi_tool failed to start");
 
         // I'm assuming a bigger buffer is better, when working with 60+ GB files,
         // but maybe not? idk how to determine the ideal buffer size.
@@ -69,28 +84,35 @@ public class DownmuxWorkflow(PluginConfiguration _configuration,
 
         // then remux the HEVC stream into an MP4 with the right DoVi side data
         // indicating it's now profile 8.1. I don't think ffmpeg can do this.
-        using var mp4box = Process.Start(new ProcessStartInfo(_configuration.PathToMP4Box)
+        using var mp4box = new Process()
         {
-            // no clue what any of this does, except for the dvp line
-            Arguments = string.Join(" ", [
-                "-add",
-                "/tmp/dovi_tool.hevc:dvp=8.1:xps_inband:hdr=none",
-                "-brand mp42isom",
-                "-ab dby1",
-                "-no-iod",
-                "/tmp/final.mp4",
-                "-tmp /tmp"
-            ])
-        });
+            StartInfo = new ProcessStartInfo(_configuration.PathToMP4Box)
+            {
+                // no clue what any of this does, except for the dvp line
+                Arguments = string.Join(" ", [
+                    "-add",
+                    $"{hevcStreamPath}:dvp=8.1:xps_inband:hdr=none",
+                    "-brand mp42isom",
+                    "-ab dby1",
+                    "-no-iod",
+                    downmuxPath,
+                    "-tmp /tmp"
+                ]),
+                RedirectStandardError = true
+            }
+        };
+        
+        _logger.LogInformation("{Command} {Arguments}", mp4box.StartInfo.FileName, mp4box.StartInfo.Arguments);
+        mp4box.Start();
 
-        if (mp4box is null || mp4box.HasExited) throw new InvalidOperationException("mp4box failed to start");
+        if (mp4box.HasExited) throw new InvalidOperationException("mp4box failed to start");
 
         while (!token.IsCancellationRequested && !mp4box.HasExited)
         {
             await Task.Delay(1000, token);
         }
 
-        File.Delete("/tmp/dovi_tool.hevc");
-        return "/tmp/final.mp4";
+        File.Delete(hevcStreamPath);
+        return downmuxPath;
     }
 }

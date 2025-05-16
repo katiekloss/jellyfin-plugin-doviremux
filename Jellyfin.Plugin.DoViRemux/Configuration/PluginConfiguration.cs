@@ -17,6 +17,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string PrimaryUser { get; set; } = string.Empty;
 
+    public bool DownmuxProfile7 { get; set; } = true;
+
+    public string PathToDoviTool { get; set; } = string.Empty;
+
+    public string PathToMP4Box { get; set; } = string.Empty;
+
     /// <summary>
     /// Parsed form of IncludeAncestorIds
     /// </summary>

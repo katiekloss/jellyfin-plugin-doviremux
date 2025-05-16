@@ -1,7 +1,6 @@
 using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
@@ -15,12 +14,13 @@ namespace Jellyfin.Plugin.DoViRemux;
 public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IMediaSourceManager _sourceManager,
                               ITranscodeManager _transcodeManager,
-                              IPluginManager _pluginManager,
+                              PluginConfiguration _configuration,
                               ILogger<RemuxLibraryTask> _logger,
                               IApplicationPaths _paths,
                               ILibraryManager _libraryManager,
                               IUserDataManager _userDataManager,
-                              IUserManager _userManager)
+                              IUserManager _userManager,
+                              DownmuxWorkflow _downmuxWorkflow)
     : IScheduledTask
 {
     public string Name => "Remux Dolby Vision MKVs";
@@ -35,20 +35,15 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var plugin = _pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin
-            ?? throw new Exception("Can't get plugin instance");
-
-        var configuration = plugin.Configuration;
-
-        var primaryUser = configuration.PrimaryUser is not null
-            ? _userManager.GetUserByName(configuration.PrimaryUser)
-                ?? throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist")
+        var primaryUser = _configuration.PrimaryUser is not null
+            ? _userManager.GetUserByName(_configuration.PrimaryUser)
+                ?? throw new Exception($"Primary user '{_configuration.PrimaryUser}' does not exist")
             : null;
 
         var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
         {
             MediaTypes = [MediaType.Video],
-            AncestorIds = configuration.IncludeAncestors
+            AncestorIds = _configuration.IncludeAncestors
         })
             .Items
             .Cast<Video>() // has some additional properties (that I don't remember if we use or not)
@@ -139,6 +134,16 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             File.Delete(outputPath);
         }
 
+        // profile 7.6 can be converted to profile 8.1, with some special handling.
+        // This will be presented as a second input to FFmpeg, and it will copy that
+        // converted video stream instead of our original MKV's.
+        string? downmuxedVideoPath = null;
+        if (streams.Any(s => s.DvProfile == 7 && s.DvLevel == 6) && _configuration.DownmuxProfile7)
+        {
+            _logger.LogInformation("Downmuxing {Id} {Name} to Profile 8.1 first", item.Id, item.Name);
+            downmuxedVideoPath = await _downmuxWorkflow.Downmux(ourSource, cancellationToken);
+        }
+
         // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it.
         // it's found on a lot of DoVi media (cough particularly hybrid remuxes cough),
         // but media like Bluray is required to have an AAC/AC3/whatever fallback stream for compatibility
@@ -176,11 +181,33 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         remuxRequest.OutputVideoCodec = "copy";
 
         string cli = "-analyzeduration 200M -probesize 1G -fflags +genpts ";
+
         cli += $"-i \"{inputPath}\" ";
-        cli += $"-map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 ";
+        if (downmuxedVideoPath is not null)
+        {
+            cli += $"-i \"{downmuxedVideoPath}\" ";
+        }
+        
+        cli += $"-map_metadata -1 -map_chapters -1 -threads 0 ";
+
+        if (downmuxedVideoPath is not null)
+        {
+            cli += "-map 1:0 ";
+        }
+        else
+        {
+            cli += "-map 0:0 ";
+        }
+
         cli += string.Concat(audioStreams.Select(a => $"-map 0:{a.Index} "));
         cli += string.Concat(subtitles.Select(s => $"-map 0:{s.Index} "));
+
+        // This doesn't need to change if we're following the profile 7 path:
+        // the bitstream filter will have no effect if it's already Annex B,
+        // we still need to tag it with the correct codec, and at this point
+        // we're referencing the output stream index (0) instead of the input
         cli += "-codec:v:0 copy -tag:v:0 dvh1 -strict experimental -bsf:v hevc_mp4toannexb -start_at_zero ";
+
         cli += string.Concat(audioStreams.Select(a => $"-codec:a:{a.OutputIndex} copy "));
         cli += string.Concat(subtitles.Select(s => $"-codec:s:{s.OutputIndex} {s.Codec} "));
         cli += string.Concat(audioStreams.Select(a => $"-metadata:s:a:{a.OutputIndex} language=\"{a.Language}\" "));
@@ -205,6 +232,11 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         finally
         {
             File.Delete(outputPath);
+            
+            if (downmuxedVideoPath is not null)
+            {
+                File.Delete(downmuxedVideoPath);
+            }
         }
     }
 }

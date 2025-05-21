@@ -39,7 +39,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var configuration = (_pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin)?.Configuration
             ?? throw new Exception("Can't get plugin configuration");
 
-        var primaryUser = configuration.PrimaryUser is not null
+        var primaryUser = !string.IsNullOrEmpty(configuration.PrimaryUser)
             ? _userManager.GetUserByName(configuration.PrimaryUser)
                 ?? throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist")
             : null;

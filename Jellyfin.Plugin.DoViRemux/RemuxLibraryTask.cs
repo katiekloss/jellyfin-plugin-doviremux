@@ -1,6 +1,7 @@
 using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
@@ -14,7 +15,7 @@ namespace Jellyfin.Plugin.DoViRemux;
 public class RemuxLibraryTask(IItemRepository _itemRepo,
                               IMediaSourceManager _sourceManager,
                               ITranscodeManager _transcodeManager,
-                              PluginConfiguration _configuration,
+                              IPluginManager _pluginManager,
                               ILogger<RemuxLibraryTask> _logger,
                               IApplicationPaths _paths,
                               ILibraryManager _libraryManager,
@@ -35,15 +36,18 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var primaryUser = _configuration.PrimaryUser is not null
-            ? _userManager.GetUserByName(_configuration.PrimaryUser)
-                ?? throw new Exception($"Primary user '{_configuration.PrimaryUser}' does not exist")
+        var configuration = (_pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin)?.Configuration
+            ?? throw new Exception("Can't get plugin configuration");
+
+        var primaryUser = configuration.PrimaryUser is not null
+            ? _userManager.GetUserByName(configuration.PrimaryUser)
+                ?? throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist")
             : null;
 
         var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
         {
             MediaTypes = [MediaType.Video],
-            AncestorIds = _configuration.IncludeAncestors
+            AncestorIds = configuration.IncludeAncestors
         })
             .Items
             .Cast<Video>() // has some additional properties (that I don't remember if we use or not)
@@ -57,7 +61,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
             try
             {
-                await ProcessOneItem(item, cancellationToken);
+                await ProcessOneItem(item, cancellationToken, configuration);
             }
             catch (Exception x)
             {
@@ -107,7 +111,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         return true;
     }
 
-    private async Task ProcessOneItem(Video item, CancellationToken cancellationToken)
+    private async Task ProcessOneItem(Video item, CancellationToken cancellationToken, PluginConfiguration configuration)
     {
         var streams = _sourceManager.GetMediaStreams(item.Id);
         var otherSources = item.GetMediaSources(true);
@@ -138,7 +142,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         // This will be presented as a second input to FFmpeg, and it will copy that
         // converted video stream instead of our original MKV's.
         string? downmuxedVideoPath = null;
-        if (streams.Any(s => s.DvProfile == 7 && s.DvLevel == 6) && _configuration.DownmuxProfile7)
+        if (streams.Any(s => s.DvProfile == 7 && s.DvLevel == 6) && configuration.DownmuxProfile7)
         {
             _logger.LogInformation("Downmuxing {Id} {Name} to Profile 8.1 first", item.Id, item.Name);
             downmuxedVideoPath = await _downmuxWorkflow.Downmux(ourSource, cancellationToken);

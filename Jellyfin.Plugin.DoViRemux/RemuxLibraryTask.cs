@@ -7,6 +7,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Streaming;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -163,9 +164,12 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
 
         // PGS subtitles aren't supported by mp4. Technically we can use the copy codec
         // and most decoders will know how to use subrip subtitles, but mov_text is standard
+        // We also need to exclude external subs, which show up as a stream even though they're
+        // not in the video file itself, so FFmpeg will be confused if we mention them to it.
         var subtitles = streams
-            .Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Subtitle
-                        && s.IsTextSubtitleStream)
+            .Where(s => s.Type == MediaStreamType.Subtitle
+                        && s.IsTextSubtitleStream
+                        && !s.IsExternal)
             .Select((subtitle, i) => new { subtitle.Index, OutputIndex = i, Codec = "mov_text", Lang = subtitle.Language })
             .ToList();
 

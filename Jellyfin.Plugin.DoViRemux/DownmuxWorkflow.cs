@@ -27,6 +27,12 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
         string doviToolOutputPath = Path.Combine(_paths.TempDirectory, $"dovi_tool_{mediaSource.Id}.hevc");
         string mp4boxOutputPath = Path.Combine(_paths.TempDirectory, $"{mediaSource.Id}_profile8.mp4");
 
+        // sometimes jellyfin hasn't done this itself but we're jellyfin too
+        if (!File.Exists(_paths.TempDirectory))
+        {
+            Directory.CreateDirectory(_paths.TempDirectory);
+        }
+        
         // extract the HEVC stream...
         using var ffmpeg = new Process()
         {

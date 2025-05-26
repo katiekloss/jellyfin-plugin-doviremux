@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Dto;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +15,8 @@ namespace Jellyfin.Plugin.DoViRemux;
 // stream from our MP4 instead of the original MKV)
 public class DownmuxWorkflow(IPluginManager _pluginManager,
                              ILogger<DownmuxWorkflow> _logger,
-                             IApplicationPaths _paths)
+                             IApplicationPaths _paths,
+                             IMediaEncoder _mediaEncoder)
 {
     public async Task<string> Downmux(MediaSourceInfo mediaSource, CancellationToken token)
     {
@@ -28,8 +30,7 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
         // extract the HEVC stream...
         using var ffmpeg = new Process()
         {
-            // technically this should use the configured path, since it can be overridden with a CLI argument
-            StartInfo = new ProcessStartInfo("ffmpeg")
+            StartInfo = new ProcessStartInfo(_mediaEncoder.EncoderPath)
             {
                 Arguments = string.Join(" ", [
                     "-y",

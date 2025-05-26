@@ -44,12 +44,13 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
                     "-dn",
                     "-c:v copy",
                     "-f hevc", // trivia: using the hevc muxer automatically adds the hevc_mp4toannexb bitstream filter
-                    ffmpegOutputPath
+                    "-"
                 ]),
-                RedirectStandardError = true
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
             }
         };
-        
+
         _logger.LogInformation("{Command} {Arguments}", ffmpeg.StartInfo.FileName, ffmpeg.StartInfo.Arguments);
         ffmpeg.Start();
 
@@ -58,9 +59,7 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
                              ffmpeg,
                              token)
             .ConfigureAwait(false);
-
-        await ffmpeg.WaitForExitAsync().ConfigureAwait(false);
-
+        
         // and feed it into dovi_tool, discarding the enhancement layer
         using var doviTool = new Process()
         {
@@ -70,13 +69,14 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
                     "-m 2", // convert RPU to 8.1
                     "convert", // modify RPU
                     "--discard", // discard EL
-                    $"--input {ffmpegOutputPath}",
-                    $"--output {doviToolOutputPath}"
+                    $"-",
+                    $"-o {doviToolOutputPath}"
                 ]),
+                RedirectStandardInput = true,
                 RedirectStandardError = true
             }
         };
-        
+
         _logger.LogInformation("{Command} {Arguments}", doviTool.StartInfo.FileName, doviTool.StartInfo.Arguments);
         doviTool.Start();
 
@@ -86,18 +86,42 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
                              token)
             .ConfigureAwait(false);
 
-        await doviTool.WaitForExitAsync();
+        var pipeTask = Task.Run(() =>
+        {
+            var buffer = new byte[4 * 1024 * 1024];
 
-        try
-        {
-            if (!File.Exists(doviToolOutputPath))
+            while (!token.IsCancellationRequested
+                   && ffmpeg.StandardOutput.BaseStream.CanRead
+                   && doviTool.StandardInput.BaseStream.CanWrite)
             {
-                throw new Exception("dovi_tool failed");
+                var bytesRead = ffmpeg.StandardOutput.BaseStream.Read(buffer, 0, 4 * 1024 * 1024);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                doviTool.StandardInput.BaseStream.Write(buffer, 0, bytesRead);
+                doviTool.StandardInput.BaseStream.Flush();
             }
-        }
-        finally
+
+            doviTool.StandardInput.BaseStream.Close();
+        }, token)
+        .ContinueWith(t =>
         {
-            File.Delete(ffmpegOutputPath);
+            if (t.IsFaulted)
+            {
+                ffmpeg.Kill();
+                doviTool.Kill();
+            }
+        });
+
+        await Task.WhenAll(RunToExit(ffmpeg),
+                           RunToExit(doviTool),
+                           pipeTask);
+
+        if (!File.Exists(doviToolOutputPath))
+        {
+            throw new Exception("HEVC extraction failed");
         }
 
         // then remux the HEVC stream into an MP4 with the right DoVi side data
@@ -119,7 +143,7 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
                 RedirectStandardError = true
             }
         };
-        
+
         _logger.LogInformation("{Command} {Arguments}", mp4box.StartInfo.FileName, mp4box.StartInfo.Arguments);
         mp4box.Start();
 
@@ -129,11 +153,24 @@ public class DownmuxWorkflow(IPluginManager _pluginManager,
                              token)
             .ConfigureAwait(false);
 
-        await mp4box.WaitForExitAsync(token);
+        await RunToExit(mp4box);
 
         File.Delete(doviToolOutputPath);
 
         return mp4boxOutputPath;
+
+        async Task RunToExit(Process p)
+        {
+            try
+            {
+                await p.WaitForExitAsync(token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                p.Kill();
+                throw;
+            }
+        }
     }
 
     private async Task WriteStreamToLog(string logPath, Stream logStream, Process logProcess, CancellationToken token)

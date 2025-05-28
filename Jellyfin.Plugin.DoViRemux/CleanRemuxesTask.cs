@@ -31,7 +31,7 @@ public class CleanRemuxesTask(IPluginManager _pluginManager,
             ?? throw new Exception("Can't get plugin instance");
 
         var configuration = plugin.Configuration;
-        if (configuration.PrimaryUser is null)
+        if (string.IsNullOrEmpty(configuration.PrimaryUser))
         {
             return;
         }

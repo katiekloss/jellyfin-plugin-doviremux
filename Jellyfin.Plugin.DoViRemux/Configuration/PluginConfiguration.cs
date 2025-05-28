@@ -17,7 +17,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string PrimaryUser { get; set; } = string.Empty;
 
-    public bool DownmuxProfile7 { get; set; } = true;
+    public bool DownmuxProfile7 { get; set; } = false;
 
     public string PathToDoviTool { get; set; } = string.Empty;
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Dto;
 using Microsoft.Extensions.Logging;
@@ -12,19 +13,30 @@ namespace Jellyfin.Plugin.DoViRemux;
 // We only need to go as far as the mp4box step, and then the main
 // RemuxLibraryTask can handle the rest (it just copies the video
 // stream from our MP4 instead of the original MKV)
-public class DownmuxWorkflow(PluginConfiguration _configuration,
+public class DownmuxWorkflow(IPluginManager _pluginManager,
                              ILogger<DownmuxWorkflow> _logger,
-                             IApplicationPaths _paths)
+                             IApplicationPaths _paths,
+                             IMediaEncoder _mediaEncoder)
 {
     public async Task<string> Downmux(MediaSourceInfo mediaSource, CancellationToken token)
     {
-        string hevcStreamPath = $"/tmp/dovi_tool_{mediaSource.Id}.hevc";
-        string downmuxPath = $"/tmp/{mediaSource.Id}_profile8.mp4";
+        var configuration = (_pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin)?.Configuration
+            ?? throw new Exception("Can't get plugin configuration");
 
+        string ffmpegOutputPath = Path.Combine(_paths.TempDirectory, $"ffmpeg_{mediaSource.Id}.hevc");
+        string doviToolOutputPath = Path.Combine(_paths.TempDirectory, $"dovi_tool_{mediaSource.Id}.hevc");
+        string mp4boxOutputPath = Path.Combine(_paths.TempDirectory, $"{mediaSource.Id}_profile8.mp4");
+
+        // sometimes jellyfin hasn't done this itself but we're jellyfin too
+        if (!File.Exists(_paths.TempDirectory))
+        {
+            Directory.CreateDirectory(_paths.TempDirectory);
+        }
+        
         // extract the HEVC stream...
         using var ffmpeg = new Process()
         {
-            StartInfo = new ProcessStartInfo("ffmpeg")
+            StartInfo = new ProcessStartInfo(_mediaEncoder.EncoderPath)
             {
                 Arguments = string.Join(" ", [
                     "-y",
@@ -34,85 +46,157 @@ public class DownmuxWorkflow(PluginConfiguration _configuration,
                     "-f hevc", // trivia: using the hevc muxer automatically adds the hevc_mp4toannexb bitstream filter
                     "-"
                 ]),
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
             }
         };
-        
+
         _logger.LogInformation("{Command} {Arguments}", ffmpeg.StartInfo.FileName, ffmpeg.StartInfo.Arguments);
         ffmpeg.Start();
 
-        if (ffmpeg is null || ffmpeg.HasExited) throw new InvalidOperationException("FFmpeg failed to start");
-
+        _ = WriteStreamToLog(Path.Combine(_paths.LogDirectoryPath, $"ffmpeg_hevc_{mediaSource.Id}_{Guid.NewGuid().ToString()[..8]}.log"),
+                             ffmpeg.StandardError.BaseStream,
+                             ffmpeg,
+                             token)
+            .ConfigureAwait(false);
+        
         // and feed it into dovi_tool, discarding the enhancement layer
         using var doviTool = new Process()
         {
-            StartInfo = new ProcessStartInfo(_configuration.PathToDoviTool)
+            StartInfo = new ProcessStartInfo(configuration.PathToDoviTool)
             {
                 Arguments = string.Join(" ", [
                     "-m 2", // convert RPU to 8.1
                     "convert", // modify RPU
                     "--discard", // discard EL
-                    "-",
-                    $"-o {hevcStreamPath}"
+                    $"-",
+                    $"-o {doviToolOutputPath}"
                 ]),
                 RedirectStandardInput = true,
                 RedirectStandardError = true
             }
         };
-        
+
         _logger.LogInformation("{Command} {Arguments}", doviTool.StartInfo.FileName, doviTool.StartInfo.Arguments);
         doviTool.Start();
-                                                   
-        if (doviTool.HasExited) throw new InvalidOperationException("dovi_tool failed to start");
 
-        // I'm assuming a bigger buffer is better, when working with 60+ GB files,
-        // but maybe not? idk how to determine the ideal buffer size.
-        var buffer = new byte[4 * 1024 * 1024];
-        var bytesRead = 0;
+        _ = WriteStreamToLog(Path.Combine(_paths.LogDirectoryPath, $"dovi_tool_{mediaSource.Id}_{Guid.NewGuid().ToString()[..8]}.log"),
+                             doviTool.StandardError.BaseStream,
+                             doviTool,
+                             token)
+            .ConfigureAwait(false);
 
-        // extremely complicated way of writing a shell pipe
-        do
+        var pipeTask = Task.Run(() =>
         {
-            bytesRead = await ffmpeg.StandardOutput.BaseStream.ReadAsync(buffer, token);
-            await doviTool.StandardInput.BaseStream.WriteAsync(buffer, 0, bytesRead);
-            await doviTool.StandardInput.BaseStream.FlushAsync();
-        }
-        while (!token.IsCancellationRequested && !ffmpeg.HasExited && bytesRead > 0);
+            var buffer = new byte[4 * 1024 * 1024];
 
-        doviTool.StandardInput.Close();
+            while (!token.IsCancellationRequested
+                   && ffmpeg.StandardOutput.BaseStream.CanRead
+                   && doviTool.StandardInput.BaseStream.CanWrite)
+            {
+                var bytesRead = ffmpeg.StandardOutput.BaseStream.Read(buffer, 0, 4 * 1024 * 1024);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                doviTool.StandardInput.BaseStream.Write(buffer, 0, bytesRead);
+                doviTool.StandardInput.BaseStream.Flush();
+            }
+
+            doviTool.StandardInput.BaseStream.Close();
+        }, token)
+        .ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+            {
+                ffmpeg.Kill();
+                doviTool.Kill();
+            }
+        });
+
+        await Task.WhenAll(RunToExit(ffmpeg),
+                           RunToExit(doviTool),
+                           pipeTask);
+
+        if (!File.Exists(doviToolOutputPath))
+        {
+            throw new Exception("HEVC extraction failed");
+        }
 
         // then remux the HEVC stream into an MP4 with the right DoVi side data
         // indicating it's now profile 8.1. I don't think ffmpeg can do this.
         using var mp4box = new Process()
         {
-            StartInfo = new ProcessStartInfo(_configuration.PathToMP4Box)
+            StartInfo = new ProcessStartInfo(configuration.PathToMP4Box)
             {
                 // no clue what any of this does, except for the dvp line
                 Arguments = string.Join(" ", [
                     "-add",
-                    $"{hevcStreamPath}:dvp=8.1:xps_inband:hdr=none",
+                    $"{doviToolOutputPath}:dvp=8.1:xps_inband:hdr=none",
                     "-brand mp42isom",
                     "-ab dby1",
                     "-no-iod",
-                    downmuxPath,
-                    "-tmp /tmp"
+                    mp4boxOutputPath,
+                    $"-tmp {_paths.TempDirectory}"
                 ]),
                 RedirectStandardError = true
             }
         };
-        
+
         _logger.LogInformation("{Command} {Arguments}", mp4box.StartInfo.FileName, mp4box.StartInfo.Arguments);
         mp4box.Start();
 
-        if (mp4box.HasExited) throw new InvalidOperationException("mp4box failed to start");
+        _ = WriteStreamToLog(Path.Combine(_paths.LogDirectoryPath, $"mp4box_{mediaSource.Id}_{Guid.NewGuid().ToString()[..8]}.log"),
+                             mp4box.StandardError.BaseStream,
+                             mp4box,
+                             token)
+            .ConfigureAwait(false);
 
-        while (!token.IsCancellationRequested && !mp4box.HasExited)
+        await RunToExit(mp4box);
+
+        File.Delete(doviToolOutputPath);
+
+        return mp4boxOutputPath;
+
+        async Task RunToExit(Process p)
         {
-            await Task.Delay(1000, token);
+            try
+            {
+                await p.WaitForExitAsync(token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                p.Kill();
+                throw;
+            }
         }
+    }
 
-        File.Delete(hevcStreamPath);
-        return downmuxPath;
+    private async Task WriteStreamToLog(string logPath, Stream logStream, Process logProcess, CancellationToken token)
+    {
+            using var writer = new StreamWriter(File.Open(
+                logPath,
+                FileMode.CreateNew,
+                FileAccess.ReadWrite,
+                FileShare.Read));
+
+            using var reader = new StreamReader(logStream);
+
+            while (logStream.CanRead && !logProcess.HasExited)
+            {
+                var line = await reader.ReadLineAsync(token).ConfigureAwait(false);
+                if (!writer.BaseStream.CanWrite)
+                {
+                    break;
+                }
+                await writer.WriteLineAsync(line).ConfigureAwait(false);
+                if (!writer.BaseStream.CanWrite)
+                {
+                    break;
+                }
+                await writer.FlushAsync().ConfigureAwait(false);
+            }
+
     }
 }

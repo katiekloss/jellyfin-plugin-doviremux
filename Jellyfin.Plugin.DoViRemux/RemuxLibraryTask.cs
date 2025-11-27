@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+
 using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Common.Configuration;
@@ -13,16 +16,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.DoViRemux;
 
-public class RemuxLibraryTask(IItemRepository _itemRepo,
-                              IMediaSourceManager _sourceManager,
-                              ITranscodeManager _transcodeManager,
-                              IPluginManager _pluginManager,
-                              ILogger<RemuxLibraryTask> _logger,
-                              IApplicationPaths _paths,
-                              ILibraryManager _libraryManager,
-                              IUserDataManager _userDataManager,
-                              IUserManager _userManager,
-                              DownmuxWorkflow _downmuxWorkflow)
+public class RemuxLibraryTask(
+    IItemRepository _itemRepo,
+    IMediaSourceManager _sourceManager,
+    ITranscodeManager _transcodeManager,
+    IPluginManager _pluginManager,
+    ILogger<RemuxLibraryTask> _logger,
+    IApplicationPaths _paths,
+    ILibraryManager _libraryManager,
+    IUserDataManager _userDataManager,
+    IUserManager _userManager,
+    DownmuxWorkflow _downmuxWorkflow)
     : IScheduledTask
 {
     public string Name => "Remux Dolby Vision MKVs";
@@ -40,10 +44,25 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var configuration = (_pluginManager.GetPlugin(Plugin.OurGuid)?.Instance as Plugin)?.Configuration
             ?? throw new Exception("Can't get plugin configuration");
 
-        var primaryUser = !string.IsNullOrEmpty(configuration.PrimaryUser)
-            ? _userManager.GetUserByName(configuration.PrimaryUser)
-                ?? throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist")
-            : null;
+        // Jellyfin 10.11+: avoid calling IUserManager.GetUserByName(string) which no longer exists.
+        // Instead, resolve the primary user by name from the Users collection.
+        User? primaryUser = null;
+
+        if (!string.IsNullOrWhiteSpace(configuration.PrimaryUser))
+        {
+            var primaryUserName = configuration.PrimaryUser.Trim();
+
+            primaryUser = _userManager.Users
+                .FirstOrDefault(u =>
+                    u is not null &&
+                    !string.IsNullOrEmpty(u.Name) &&
+                    string.Equals(u.Name, primaryUserName, StringComparison.OrdinalIgnoreCase));
+
+            if (primaryUser is null)
+            {
+                throw new Exception($"Primary user '{configuration.PrimaryUser}' does not exist");
+            }
+        }
 
         var itemsToProcess = _itemRepo.GetItems(new InternalItemsQuery
         {
@@ -100,13 +119,11 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         // like trickplay/thumbnail images (or even the entire video) may show up as the silly purple-and-green versions.
         if (doviStream?.DvProfile is null) return false;
 
-        // if there's an existing MP4 source, assume we made it.
-        // also I can't decide if I like that the model object comes back with services inside it
-        // which can run lookups like this. The API is sort of clean, actually, but... am I just a hater?
+        // If there's an existing MP4 source, assume we made it already.
         var otherSources = item.GetMediaSources(true);
         if (otherSources.Any(s => s.Container == "mp4")) return false;
 
-        // or if there's an unmerged, standalone item at the expected path
+        // Or if there's an unmerged, standalone item at the expected path
         if (_libraryManager.FindByPath(item.Path + ".mp4", false) is not null) return false;
 
         return true;
@@ -118,12 +135,12 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         var otherSources = item.GetMediaSources(true);
         var ourSource = otherSources.First(s => s.Container == "mkv");
 
-        // we remux to a temporary file first, then move it to the final directory.
-        // this improves performance when jellyfin's temp directory is on a separate
+        // We remux to a temporary file first, then move it to the final directory.
+        // This improves performance when Jellyfin's temp directory is on a separate
         // drive from the original media, because there's no simultaneous IO. It also
-        // avoids the problem of jellyfin trying to process the file before it's done,
+        // avoids the problem of Jellyfin trying to process the file before it's done,
         // which can impact things like trickplay (or anything that uses ffprobe,
-        // though the faststart flag can help with that)
+        // though the faststart flag can help with that).
         var inputPath = ourSource.Path;
         var finalPath = $"{inputPath}.mp4";
         var outputPath = Path.Combine(_paths.TempDirectory, finalPath.GetHashCode() + ".mp4");
@@ -139,7 +156,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             File.Delete(outputPath);
         }
 
-        // profile 7.6 can be converted to profile 8.1, with some special handling.
+        // Profile 7.6 can be converted to profile 8.1 with some special handling.
         // This will be presented as a second input to FFmpeg, and it will copy that
         // converted video stream instead of our original MKV's.
         string? downmuxedVideoPath = null;
@@ -149,12 +166,12 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             downmuxedVideoPath = await _downmuxWorkflow.Downmux(ourSource, cancellationToken);
         }
 
-        // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it.
-        // it's found on a lot of DoVi media (cough particularly hybrid remuxes cough),
-        // but media like Bluray is required to have an AAC/AC3/whatever fallback stream for compatibility
+        // TrueHD isn't supported by many consumer MP4 decoders even though FFmpeg can handle it.
+        // It's found on a lot of DoVi media (particularly hybrid remuxes),
+        // but media like Blu-ray is required to have an AAC/AC3/whatever fallback stream for compatibility.
         var audioStreams = streams.Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio
                                               && s.Codec != "truehd")
-                                  .Select((audioStream, i) => new { audioStream.Index, OutputIndex = i, audioStream.Language})
+                                  .Select((audioStream, i) => new { audioStream.Index, OutputIndex = i, audioStream.Language })
                                   .ToList();
         if (audioStreams.Count == 0)
         {
@@ -162,8 +179,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             throw new Exception("Couldn't find an appropriate audio stream to copy");
         }
 
-        // PGS subtitles aren't supported by mp4. Technically we can use the copy codec
-        // and most decoders will know how to use subrip subtitles, but mov_text is standard
+        // PGS subtitles aren't supported by MP4. Technically we can use the copy codec
+        // and most decoders will know how to use SubRip subtitles, but mov_text is standard.
         // We also need to exclude external subs, which show up as a stream even though they're
         // not in the video file itself, so FFmpeg will be confused if we mention them to it.
         var subtitles = streams
@@ -173,20 +190,21 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             .Select((subtitle, i) => new { subtitle.Index, OutputIndex = i, Codec = "mov_text", Lang = subtitle.Language })
             .ToList();
 
-        var remuxRequest = new StreamState(_sourceManager, TranscodingJobType.Progressive, _transcodeManager);
-
-        remuxRequest.MediaSource = ourSource;
-        remuxRequest.Request = new StreamingRequestDto
+        var remuxRequest = new StreamState(_sourceManager, TranscodingJobType.Progressive, _transcodeManager)
         {
-            LiveStreamId = null // i don't remember why this has to be null
+            MediaSource = ourSource,
+            Request = new StreamingRequestDto
+            {
+                // Must be null for this usage
+                LiveStreamId = null
+            },
+            MediaPath = outputPath,
+
+            // Avoid NREs and change the log filename prefix from "Transcode" to "Remux"
+            OutputContainer = "mp4",
+            OutputAudioCodec = "copy",
+            OutputVideoCodec = "copy"
         };
-
-        remuxRequest.MediaPath = outputPath;
-
-        // avoids NREs and changes the log filename prefix from "Transcode" to "Remux"
-        remuxRequest.OutputContainer = "mp4";
-        remuxRequest.OutputAudioCodec = "copy";
-        remuxRequest.OutputVideoCodec = "copy";
 
         string cli = "-analyzeduration 200M -probesize 1G -fflags +genpts ";
 
@@ -195,8 +213,8 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         {
             cli += $"-i \"{downmuxedVideoPath}\" ";
         }
-        
-        cli += $"-map_metadata -1 -map_chapters -1 -threads 0 ";
+
+        cli += "-map_metadata -1 -map_chapters -1 -threads 0 ";
 
         if (downmuxedVideoPath is not null)
         {
@@ -213,7 +231,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         // This doesn't need to change if we're following the profile 7 path:
         // the bitstream filter will have no effect if it's already Annex B,
         // we still need to tag it with the correct codec, and at this point
-        // we're referencing the output stream index (0) instead of the input
+        // we're referencing the output stream index (0) instead of the input.
         cli += "-codec:v:0 copy -tag:v:0 dvh1 -strict experimental -bsf:v hevc_mp4toannexb -start_at_zero ";
 
         cli += string.Concat(audioStreams.Select(a => $"-codec:a:{a.OutputIndex} copy "));
@@ -226,8 +244,14 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         cancellationToken.ThrowIfCancellationRequested();
 
         var remuxCancelToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        using var job = await _transcodeManager.StartFfMpeg(remuxRequest, outputPath, cli, Guid.Empty, TranscodingJobType.Progressive, remuxCancelToken);
-        
+        using var job = await _transcodeManager.StartFfMpeg(
+            remuxRequest,
+            outputPath,
+            cli,
+            Guid.Empty,
+            TranscodingJobType.Progressive,
+            remuxCancelToken);
+
         while (!cancellationToken.IsCancellationRequested && !job.HasExited)
         {
             await Task.Delay(1000, cancellationToken);
@@ -240,7 +264,7 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
         finally
         {
             File.Delete(outputPath);
-            
+
             if (downmuxedVideoPath is not null)
             {
                 File.Delete(downmuxedVideoPath);

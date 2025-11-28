@@ -1,8 +1,8 @@
 name: "DoViRemux"
 guid: "2f215b63-1a73-4193-9102-78f84d027014"
-version: 3.2.0
-targetAbi: "10.10.6.0"
-framework: "net8.0"
+version: 3.3.0
+targetAbi: "10.11.0.0"
+framework: "net9.0"
 owner: "katiekloss"
 overview: "Automatically remux Dolby Vision files"
 description: >
@@ -12,9 +12,4 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.DoViRemux.dll"
 changelog: |-
-  - Fixed an error on task start when no primary user is set
-  - Fixed remuxes crashing when the media has external subtitles
-  - Fixed configuration changes requiring a restart to take effect
-  - Improved logging for the 7.6 to 8.1 downmux processes
-  - Fixed a deadlock between ffmpeg and dovi_tool during downmuxes
-  - 7.6 downmuxing is no longer enabled by default after initial plugin installation
+  - Plugin now supports Jellyfin 10.11

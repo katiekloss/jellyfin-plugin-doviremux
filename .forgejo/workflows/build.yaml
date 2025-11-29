@@ -1,0 +1,11 @@
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: nomad
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+      - run: dotnet build

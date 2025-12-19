@@ -139,16 +139,6 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
             File.Delete(outputPath);
         }
 
-        // profile 7.6 can be converted to profile 8.1, with some special handling.
-        // This will be presented as a second input to FFmpeg, and it will copy that
-        // converted video stream instead of our original MKV's.
-        string? downmuxedVideoPath = null;
-        if (streams.Any(s => s.DvProfile == 7 && s.DvLevel == 6) && configuration.DownmuxProfile7)
-        {
-            _logger.LogInformation("Downmuxing {Id} {Name} to Profile 8.1 first", item.Id, item.Name);
-            downmuxedVideoPath = await _downmuxWorkflow.Downmux(ourSource, cancellationToken);
-        }
-
         // truehd isn't supported by many consumer MP4 decoders even though ffmpeg can do it.
         // it's found on a lot of DoVi media (cough particularly hybrid remuxes cough),
         // but media like Bluray is required to have an AAC/AC3/whatever fallback stream for compatibility
@@ -172,6 +162,16 @@ public class RemuxLibraryTask(IItemRepository _itemRepo,
                         && !s.IsExternal)
             .Select((subtitle, i) => new { subtitle.Index, OutputIndex = i, Codec = "mov_text", Lang = subtitle.Language })
             .ToList();
+
+        // profile 7.6 can be converted to profile 8.1, with some special handling.
+        // This will be presented as a second input to FFmpeg, and it will copy that
+        // converted video stream instead of our original MKV's.
+        string? downmuxedVideoPath = null;
+        if (streams.Any(s => s.DvProfile == 7 && s.DvLevel == 6) && configuration.DownmuxProfile7)
+        {
+            _logger.LogInformation("Downmuxing {Id} {Name} to Profile 8.1 first", item.Id, item.Name);
+            downmuxedVideoPath = await _downmuxWorkflow.Downmux(ourSource, cancellationToken);
+        }
 
         var remuxRequest = new StreamState(_sourceManager, TranscodingJobType.Progressive, _transcodeManager);
 
